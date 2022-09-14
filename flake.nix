@@ -17,9 +17,11 @@
         packages.nm-follow = stdenv.mkDerivation rec {
           name = "nm-follow";
           src = ./.;
-          propagatedBuildInputs = with python3Packages; [
-            dbus-python
-            pygobject3
+          propagatedBuildInputs = [
+            (python3.withPackages (p: with p; [
+              dbus-python
+              pygobject3
+            ]))
           ];
 
           installPhase = ''
