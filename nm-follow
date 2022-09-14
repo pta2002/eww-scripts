@@ -1,0 +1,133 @@
+#!/usr/bin/env python3
+import dbus
+import json
+
+from dbus.mainloop.glib import DBusGMainLoop
+DBusGMainLoop(set_as_default=True)
+
+def get_property(iface, prop):
+    props_iface = dbus.Interface(iface.proxy_object, 'org.freedesktop.DBus.Properties')
+    return props_iface.Get(iface.dbus_interface, prop)
+
+def get_properties(iface):
+    props_iface = dbus.Interface(iface.proxy_object, 'org.freedesktop.DBus.Properties')
+    return props_iface.GetAll(iface.dbus_interface)
+
+
+
+bus = dbus.SystemBus()
+
+nm = bus.get_object('org.freedesktop.NetworkManager', '/org/freedesktop/NetworkManager')
+nm_iface = dbus.Interface(nm, dbus_interface='org.freedesktop.NetworkManager')
+
+class Connection(object):
+    def __init__(self, conn):
+        self.conn_iface = dbus.Interface(bus.get_object('org.freedesktop.NetworkManager', conn), dbus_interface='org.freedesktop.NetworkManager.Connection.Active')
+
+    def get_specific_object(self):
+        so = get_property(self.conn_iface, 'SpecificObject')
+        if so != "" and so.split('/')[-2] != 'AccessPoint':
+            return None
+        return AccessPoint(dbus.Interface(bus.get_object('org.freedesktop.NetworkManager', so), dbus_interface='org.freedesktop.NetworkManager.AccessPoint'))
+    
+    def dict(self):
+        if obj := self.get_specific_object():
+           return obj.dict()
+        return {}
+
+# TODO: Signal handler on connection
+# Start handling PropertiesChanged if there's an AP, remove that handler when there isn't one
+
+class AccessPoint(object):
+    def __init__(self, ap):
+        self.ap = ap
+    
+    def get_ssid(self):
+        return "".join(map(chr, get_property(self.ap, 'Ssid')))
+
+    def get_strength(self):
+        return get_property(self.ap, 'Strength')
+    
+    def dict(self):
+        return { 'ssid': self.get_ssid(), 'strength': self.get_strength() }
+
+def get_default_connection() -> Connection | None:
+    conn = get_property(nm_iface, 'PrimaryConnection')
+    if conn != '/':
+        return Connection(conn)
+    return None
+
+def nm_state_to_str(state):
+    match state:
+        case 10:
+            return 'UNKNOWN'
+        case 20:
+            return 'DISCONNECTED'
+        case 30:
+            return 'DISCONNECTING'
+        case 40:
+            return 'CONNECTING'
+        case 50:
+            return 'CONNECTED_LOCAL'
+        case 60:
+            return 'CONNECTED_SITE'
+        case 70:
+            return 'CONNECTED_GLOBAL'
+        case _:
+            return 'UNKNOWN'
+
+class GlobalState():
+    def __init__(self):
+        self.state = nm_state_to_str(get_property(nm_iface, 'State'))
+        self.connection = get_default_connection()
+        self.connection_type = get_property(nm_iface, 'PrimaryConnectionType')
+
+    def connect_signals(self):
+        def signalhandler(handler):
+            def wrapper(*args, **kwargs):
+                if handler(*args, **kwargs):
+                    self.print()
+            return wrapper
+
+        @signalhandler
+        def props_changed(_, props, invalidated):
+            changed = False
+            if 'state' in props:
+                changed = True
+                self.state = nm_state_to_str(props['state'])
+            else:
+                new = nm_state_to_str(get_property(nm_iface, 'State'))
+                if new != self.state:
+                    self.state = new
+                    changed = True
+            if 'PrimaryConnection' in props:
+                changed = True
+                if props['PrimaryConnection'] != "/":
+                    self.connection = Connection(props['PrimaryConnection'])
+                else:
+                    self.connection = None
+            if 'PrimaryConnectionType' in props:
+                changed = True
+                self.connection_type = props['PrimaryConnectionType']
+            return changed
+
+        props_iface = dbus.Interface(nm, 'org.freedesktop.DBus.Properties')
+        props_iface.connect_to_signal('PropertiesChanged', props_changed)
+
+    def print(self):
+        dict = { 'state': self.state }
+        if self.connection is not None:
+            dict['connection'] = self.connection.dict()
+        if self.connection_type != "":
+            dict['connection_type'] = self.connection_type
+        print(json.dumps(dict))
+
+if __name__ == "__main__":
+    from gi.repository import GLib
+    loop = GLib.MainLoop()
+
+    state = GlobalState()
+    state.connect_signals()
+    state.print()
+
+    loop.run()
