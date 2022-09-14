@@ -120,7 +120,7 @@ class GlobalState():
             dict['connection'] = self.connection.dict()
         if self.connection_type != "":
             dict['connection_type'] = self.connection_type
-        print(json.dumps(dict))
+        print(json.dumps(dict), flush=True)
 
 if __name__ == "__main__":
     from gi.repository import GLib
