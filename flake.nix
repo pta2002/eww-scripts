@@ -14,8 +14,8 @@
               python3Packages.pygobject3
             ];
           };
-        packages.nm-follow = stdenv.mkDerivation rec {
-          name = "nm-follow";
+        packages.follows = stdenv.mkDerivation rec {
+          name = "follows";
           src = ./.;
           propagatedBuildInputs = [
             (python3.withPackages (p: with p; [
@@ -27,6 +27,7 @@
           installPhase = ''
             mkdir -p $out/bin
             cp ./nm-follow $out/bin/nm-follow
+            cp ./bspwm-follow $out/bin/bspwm-follow
           '';
         };
       }
