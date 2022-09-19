@@ -1,9 +1,13 @@
 {
   inputs.flake-utils.url = "github:numtide/flake-utils";
+  inputs.naersk.url = "github:nix-community/naersk";
 
-  outputs = { self, nixpkgs, flake-utils }:
+  outputs = { self, nixpkgs, flake-utils, naersk }:
     flake-utils.lib.eachDefaultSystem (system:
-      let pkgs = nixpkgs.legacyPackages.${system}; in
+      let
+        pkgs = nixpkgs.legacyPackages.${system};
+        naersk' = pkgs.callPackage naersk { };
+      in
       with pkgs;{
         devShell = mkShell
           {
@@ -12,6 +16,9 @@
               python3
               dbus-python
               python3Packages.pygobject3
+              cargo
+              rustc
+              rustfmt
             ];
           };
         packages.follows = stdenv.mkDerivation rec {
@@ -29,6 +36,9 @@
             cp ./nm-follow $out/bin/nm-follow
             cp ./bspwm-follow $out/bin/bspwm-follow
           '';
+        };
+        packages.upower-follow = naersk'.buildPackage {
+          src = ./upower-follow;
         };
       }
     );
