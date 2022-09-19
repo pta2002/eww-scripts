@@ -1,3 +1,4 @@
+use futures::join;
 use serde::Serialize;
 use upower_dbus::{BatteryState, DeviceProxy, UPowerProxy};
 use zbus::export::futures_util::StreamExt;
@@ -18,26 +19,37 @@ struct BatStatusStream<'c> {
     icon_stream: PropertyStream<'c, <Result<String> as ResultAdapter>::Ok>,
 }
 
+fn is_charging(state: BatteryState) -> bool {
+    return state == BatteryState::FullyCharged || state == BatteryState::Charging;
+}
+
 impl<'c> BatStatusStream<'c> {
     pub async fn from(device: &DeviceProxy<'c>) -> Result<BatStatusStream<'c>> {
-        // TODO: Batch the awaits
+        let results = join!(
+            device.percentage(),
+            device.state(),
+            device.icon_name(),
+            device.receive_state_changed(),
+            device.receive_percentage_changed(),
+            device.receive_icon_name_changed()
+        );
+
         Ok(BatStatusStream {
             current_status: BatStatus {
-                percentage: device.percentage().await?,
-                charging: device.state().await? == BatteryState::Charging, // TODO: There's def
-                // better ways
-                icon: device.icon_name().await?,
+                percentage: results.0?,
+                charging: is_charging(results.1?),
+                icon: results.2?,
             },
-            state_stream: device.receive_state_changed().await,
-            percentage_stream: device.receive_percentage_changed().await,
-            icon_stream: device.receive_icon_name_changed().await,
+            state_stream: results.3,
+            percentage_stream: results.4,
+            icon_stream: results.5,
         })
     }
 
     pub async fn next(&mut self) -> Result<&BatStatus> {
         tokio::select! {
             Some(status) = self.state_stream.next() => {
-                self.current_status.charging = status.get().await? == BatteryState::Charging;
+                self.current_status.charging = is_charging(status.get().await?);
             }
             Some(icon) = self.icon_stream.next() => {
                 self.current_status.icon = icon.get().await?;
