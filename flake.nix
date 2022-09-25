@@ -19,6 +19,9 @@
               cargo
               rustc
               rustfmt
+              pkg-config
+              pipewire
+              libclang
             ];
           };
         packages.follows = stdenv.mkDerivation rec {
