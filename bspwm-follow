@@ -2,7 +2,6 @@
 from enum import Enum
 import json
 import subprocess
-import sys
 
 example = "WMeDP1:oI:oII:OIII:fIV:fV:fVI:fVII:fVIII:fIX:fX:LT:TT:G"
 
@@ -25,10 +24,18 @@ class Desktop():
 
 def parse_report(report: str):
     result = {
-        "desktops": []
     }
 
+    monitor = ""
+
     for segment in report.split(":"):
+        if segment[0] == "W":
+            segment = segment[1:]
+
+        if segment[0].lower() == "m":
+            monitor = segment[1:]
+            result[monitor] = []
+
         if segment[0].lower() in "ofu":
             # this is a desktop
             desktop = Desktop()
@@ -43,7 +50,7 @@ def parse_report(report: str):
                 case 'f':
                     desktop.status = Status.FREE
 
-            result["desktops"].append(desktop.dict())
+            result[monitor].append(desktop.dict())
 
     return result
 
