@@ -14,12 +14,14 @@ class Desktop():
     focused: bool
     status: Status
     name: str
+    index: int
 
     def dict(self):
         return {
             "name": self.name,
             "focused": self.focused,
-            "status": self.status.name
+            "status": self.status.name,
+            "index": self.index
         }
 
 def parse_report(report: str):
@@ -28,7 +30,7 @@ def parse_report(report: str):
 
     monitor = ""
 
-    for segment in report.split(":"):
+    for i, segment in enumerate(report.split(":")):
         if segment[0] == "W":
             segment = segment[1:]
 
@@ -41,6 +43,7 @@ def parse_report(report: str):
             desktop = Desktop()
             desktop.focused = segment[0].isupper()
             desktop.name = segment[1:]
+            desktop.index = i
 
             match segment[0].lower():
                 case 'o':
