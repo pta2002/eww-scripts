@@ -1,6 +1,6 @@
 use futures::join;
 use serde::Serialize;
-use upower_dbus::{BatteryState, DeviceProxy, UPowerProxy};
+use upower_dbus::{BatteryState, BatteryType, DeviceProxy, UPowerProxy};
 use zbus::export::futures_util::StreamExt;
 use zbus::{Connection, PropertyStream, Result, ResultAdapter};
 
@@ -9,6 +9,7 @@ struct BatStatus {
     percentage: f64,
     charging: bool,
     icon: String,
+    is_battery: bool,
 }
 
 #[derive(Debug)]
@@ -31,7 +32,8 @@ impl<'c> BatStatusStream<'c> {
             device.icon_name(),
             device.receive_state_changed(),
             device.receive_percentage_changed(),
-            device.receive_icon_name_changed()
+            device.receive_icon_name_changed(),
+            device.type_(),
         );
 
         Ok(BatStatusStream {
@@ -39,6 +41,7 @@ impl<'c> BatStatusStream<'c> {
                 percentage: results.0?,
                 charging: is_charging(results.1?),
                 icon: results.2?,
+                is_battery: results.6? == BatteryType::Battery,
             },
             state_stream: results.3,
             percentage_stream: results.4,
