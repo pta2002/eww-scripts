@@ -20,7 +20,7 @@
               rustc
               rustfmt
               pkg-config
-              pipewire
+              pulseaudio
               libclang
             ];
           };
@@ -42,6 +42,16 @@
         };
         packages.upower-follow = naersk'.buildPackage {
           src = ./upower-follow;
+        };
+
+        packages.pa-follow = naersk'.buildPackage {
+          src = ./pa-follow;
+
+          buildInputs = [ pkgs.pulseaudio ];
+
+          postInstall = ''
+            patchelf --set-rpath "${pulseaudio}/lib" $out/bin/pa-follow
+          '';
         };
       }
     );
