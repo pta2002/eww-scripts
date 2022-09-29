@@ -41,7 +41,7 @@ class Connection(object):
 class AccessPoint(object):
     def __init__(self, ap):
         self.ap = ap
-    
+
     def get_ssid(self):
         return "".join(map(chr, get_property(self.ap, 'Ssid')))
 

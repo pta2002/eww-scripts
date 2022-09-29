@@ -22,6 +22,7 @@
               pkg-config
               pulseaudio
               libclang
+              go
             ];
           };
         packages.follows = stdenv.mkDerivation rec {
