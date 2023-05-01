@@ -11,7 +11,6 @@
       with pkgs;{
         devShell = mkShell
           {
-            name = "cg";
             buildInputs = with python3Packages; [
               python3
               dbus-python
@@ -23,6 +22,9 @@
               pulseaudio
               libclang
               go
+
+              janet
+              jpm
             ];
           };
         packages.follows = stdenv.mkDerivation rec {
@@ -54,6 +56,50 @@
             patchelf --set-rpath "${pulseaudio}/lib" $out/bin/pa-follow
           '';
         };
+
+        packages.hypr-follow =
+          let
+            spork = stdenv.mkDerivation {
+              name = "janet-spork";
+              src = pkgs.fetchFromGitHub {
+                owner = "janet-lang";
+                repo = "spork";
+                sha256 = "0jj5w9ii1fglhqxm6df0gwij6ki016254b3xcbvfin7r5c8mgbgm";
+                rev = "a3ee63c137ee3234987dbbca71b566994ff8ae8c";
+              };
+
+              nativeBuildInputs = [ pkgs.janet pkgs.jpm ];
+
+              buildPhase = ''
+                jpm build
+              '';
+
+              installPhase = ''
+                mkdir -p $out
+                cp -r build/* $out
+              '';
+            };
+          in
+          stdenv.mkDerivation {
+            name = "hypr-follow";
+            src = ./hypr-follow;
+
+            nativeBuildInputs = [ janet jpm ];
+
+            unpackPhase = ''
+              mkdir -p jpm-tree
+              cp -r ${spork}/* ./jpm-tree
+              cp -r $src/* .
+            '';
+
+            buildPhase = ''
+              jpm build -l;
+            '';
+
+            installPhase = ''
+              jpm install --binpath="$out"
+            '';
+          };
       }
     );
 }
