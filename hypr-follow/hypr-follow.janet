@@ -13,13 +13,6 @@
         acc))
     (table/new (length coll)) coll))
 
-(defn take-while-index [fun coll]
-  (var i 0)
-  (while (and (< i (length coll))
-              (fun (get coll i)))
-    (set i (inc i)))
-  i)
-
 (defn if= [tag value pat]
   ~(if (drop (cmt (-> ,tag) ,|(= $ value))) ,pat))
 
@@ -48,16 +41,17 @@
     :add-workspace
     (fn [self ws]
       # We need to insert the workspace into the correct position.)})
-      (array/insert
-        (self :workspaces)
-        (or (-?> (take-while-index |(<= (get $ :id) (ws :id)) (self :workspaces)))
-            0)
-        ws))
+      (set ((self :workspaces) (ws :name)) ws))
 
     :remove-workspace
     (fn [self ws]
-      (-?>> (find-index |(= (get $ :name)) ws (self :workspaces))
-           (array/remove (self :workspaces))))})
+      (set ((self :workspaces) ws) nil))
+    
+    :get-formatted
+    (fn [self]
+      {:name (self :name)
+       :activeWorkspace (self :active-workspace)
+       :workspaces (sort-by |(get $ :id) (values (self :workspaces)))})})
 
 (defn make-monitor [monitor]
   (table/setproto
@@ -65,7 +59,7 @@
       :id (monitor "id")
       :active-workspace ((monitor "activeWorkspace") "id")
       :focused (monitor "focused")
-      :workspaces @[]}
+      :workspaces @{}}
     Monitor))
 
 (defn make-workspace [workspace]
@@ -79,6 +73,12 @@
       (json/decode)
       (map make-workspace)
       (collect-by :name)))
+
+(defn print-monitors [monitors]
+  (def out @{})
+  (each monitor (map :get-formatted monitors)
+    (set (out (monitor :name)) monitor))
+  (print (json/encode out)))
 
 (defn main [&]
   (def monitors
@@ -95,7 +95,7 @@
               (:add-workspace monitor (make-workspace ws))))))
 
   # TODO: create-workspace, activewindow, etc... should not be hard
-  (print (json/encode monitors))
+  (print-monitors monitors)
   (flush)
   (with
     [conn (net/connect
@@ -117,11 +117,10 @@
             # TODO: Update :focused on monitors
             "focusedmon" (set monitor (find |(= (get $ :name) ((event :value) :name)) monitors))
             "createworkspace"
-            (let [workspace ((get-workspaces) (event :value))]
-              (:add-workspace
-                (monitors (workspace :monitor))
-                workspace))
+            (let [workspace ((get-workspaces) (event :value))
+                  monitor (monitors (workspace :monitor))]
+              (:add-workspace monitor workspace))
             "destroyworkspace" (:remove-workspace monitor (event :value))))
             
-        (print (json/encode monitors))
+        (print-monitors monitors)
         (flush)))))
