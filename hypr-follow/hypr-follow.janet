@@ -29,8 +29,13 @@
       :text '(to "\n")
       :windowtitle (/ (* '(to ",") "," :text)
                       ,(fn [app title] {:app app :title title}))
+      :monitor (/ (* '(to ",") "," '(number (some :d)))
+                  ,(fn [name id _] {:name name :workspace id}))
       :value (+ ,(if= :event "activewindow" :windowtitle)
                 ,(if= :event "workspace" '(number (some :d)))
+                ,(if= :event "createworkspace" :text)
+                ,(if= :event "destroyworkspace" :text)
+                ,(if= :event "focusedmon" :monitor)
                 :text)
       :main (some (/ (* :event ">>" :value "\n") ,mkev))}))
 
@@ -47,19 +52,33 @@
         (self :workspaces)
         (or (-?> (take-while-index |(<= (get $ :id) (ws :id)) (self :workspaces)))
             0)
-        ws))})
+        ws))
+
+    :remove-workspace
+    (fn [self ws]
+      (-?>> (find-index |(= (get $ :name)) ws (self :workspaces))
+           (array/remove (self :workspaces))))})
 
 (defn make-monitor [monitor]
   (table/setproto
     @{:name (monitor "name")
+      :id (monitor "id")
       :active-workspace ((monitor "activeWorkspace") "id")
+      :focused (monitor "focused")
       :workspaces @[]}
     Monitor))
 
 (defn make-workspace [workspace]
   @{:id (workspace "id")
     :name (workspace "name")
+    :monitor (workspace "monitor")
     :windows (workspace "windows")})
+
+(defn get-workspaces []
+  (->> ($< hyprctl workspaces -j)
+      (json/decode)
+      (map make-workspace)
+      (collect-by :name)))
 
 (defn main [&]
   (def monitors
@@ -77,21 +96,32 @@
 
   # TODO: create-workspace, activewindow, etc... should not be hard
   (print (json/encode monitors))
+  (flush)
   (with
     [conn (net/connect
             :unix
             (string "/tmp/hypr/"
                     (os/getenv "HYPRLAND_INSTANCE_SIGNATURE")
                     "/.socket2.sock"))]
-    (var monitor (first (keys monitors)))
+
+    (var monitor (find |(get $ :focused) monitors))
 
     (while true
       (do
-        (def res (:read conn 1024))
+        (def res (:read conn 4096))
 
         (each event (peg/match hyprmsg res)
+          # (pp event)
           (case (event :event)
-            "workspace" (set ((monitors monitor) "activeWorkspace") (event :value))))
+            "workspace" (:set-active-workspace monitor (event :value))
+            # TODO: Update :focused on monitors
+            "focusedmon" (set monitor (find |(= (get $ :name) ((event :value) :name)) monitors))
+            "createworkspace"
+            (let [workspace ((get-workspaces) (event :value))]
+              (:add-workspace
+                (monitors (workspace :monitor))
+                workspace))
+            "destroyworkspace" (:remove-workspace monitor (event :value))))
             
         (print (json/encode monitors))
-        (pp (peg/match hyprmsg res))))))
+        (flush)))))
