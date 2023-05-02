@@ -75,8 +75,54 @@
               '';
 
               installPhase = ''
-                mkdir -p $out
-                cp -r build/* $out
+                mkdir -p $out/{bin,lib}
+                export JANET_MODPATH=$out/lib
+                export JANET_BINPATH=$out/bin
+                jpm install
+              '';
+            };
+            posix-spawn = stdenv.mkDerivation {
+              name = "janet-posix-spawn";
+              src = pkgs.fetchFromGitHub {
+                owner = "andrewchambers";
+                repo = "janet-posix-spawn";
+                sha256 = "1k5vpcfnrn5dg8lp7rvpxxb1blmdv0a140dpcg7yqrw0m100y8cj";
+                rev = "d73057161a8d10f27b20e69f0c1e2ceb3e145f97";
+              };
+
+              nativeBuildInputs = [ pkgs.janet pkgs.jpm ];
+
+              buildPhase = ''
+                jpm build
+              '';
+
+              installPhase = ''
+                mkdir -p $out/{bin,lib}
+                export JANET_MODPATH=$out/lib
+                export JANET_BINPATH=$out/bin
+                jpm install
+              '';
+            };
+            sh = stdenv.mkDerivation {
+              name = "janet-sh";
+              src = pkgs.fetchFromGitHub {
+                owner = "andrewchambers";
+                repo = "janet-sh";
+                sha256 = "1kjd2nma2ivn53n48dnrh7yz05v6ssnbl4icvggfy7czzarl9am6";
+                rev = "221bcc869bf998186d3c56a388c8313060bfd730";
+              };
+
+              nativeBuildInputs = [ pkgs.janet pkgs.jpm ];
+
+              buildPhase = ''
+                jpm build
+              '';
+
+              installPhase = ''
+                mkdir -p $out/{bin,lib}
+                export JANET_MODPATH=$out/lib
+                export JANET_BINPATH=$out/bin
+                jpm install
               '';
             };
           in
@@ -87,17 +133,20 @@
             nativeBuildInputs = [ janet jpm ];
 
             unpackPhase = ''
-              mkdir -p jpm-tree
-              cp -r ${spork}/* ./jpm-tree
+              mkdir -p jpm_tree/{bin,lib}
+              cp -r ${spork}/lib/* jpm_tree/lib
+              cp -r ${sh}/lib/* jpm_tree/lib
+              cp -r ${posix-spawn}/lib/* jpm_tree/lib
               cp -r $src/* .
             '';
 
             buildPhase = ''
-              jpm build -l;
+              jpm build -l --libpath=${janet}/lib;
             '';
 
             installPhase = ''
-              jpm install --binpath="$out"
+              mkdir -p $out/bin
+              cp build/hypr-follow $out/bin
             '';
           };
       }
